@@ -5,6 +5,15 @@ import neovim
 sys.path.append(os.path.dirname(__file__))
 import proc as fstar
 
+# does not work
+def catch_exception(fn):
+    def body(self, *args, **kwargs):
+        try:
+            fn(self, *args, **kwargs)
+        except Exception as ex:
+            self.log.exception('auto caught exception')
+
+
 @neovim.plugin
 class FStarIde:
     def __init__(self, vim):
@@ -22,12 +31,11 @@ class FStarIde:
         self.current_push_stop = 0
         self.horizons = [0]
         self.vim.api.call_function('setpos', ["'p", [0, 0, 0, 0]])
-        
 
     def fstar_init(self):
         if not self.fstar_inited:
-            filename = self.vim.api.call_function('expand', ['%:p'])
-            fstar.init(filename)
+            self.filename = self.vim.api.call_function('expand', ['%:p'])
+            fstar.init(self.filename)
             self.fstar_inited = True
 
     def getpos(self):
@@ -95,9 +103,17 @@ class FStarIde:
 
     def handle_lookup(self, info):
         def_at = info['defined-at']
-        # todo if location is <input>, use current file
+        if def_at['fname'] == '<input>':
+            def_at['fname'] = self.filename
 
         self.vim.command('pedit +:{} {}'.format(def_at['beg'][0], def_at['fname']))
+
+    def handle_lookup_type(self, info):
+        self.vim.command('pedit type_lookup')
+        nr = self.vim.api.call_function('bufnr', ['type_lookup'])
+        buf = self.vim.buffers[nr]
+        buf.append(info)
+
         
 
     @neovim.command('FStarSendPara', range='', nargs='0', sync=False)
@@ -117,9 +133,9 @@ class FStarIde:
     def send_to_cursor(self, args, range):
         try:
             self.fstar_init()
-            (code, _, _) = self.get_block(True)
+            (code, lnum, col) = self.get_block(True)
             self.vim.api.call_function('setqflist', [[]])
-            fstar.push_code(code, 1, 0)
+            fstar.push_code(code, lnum, col)
             fstar.read_any()
         except Exception as ex:
             self.log.exception('when pushing to cursor')
@@ -135,15 +151,24 @@ class FStarIde:
         except Exception as ex:
             self.log.exception('in pop code')
 
-    @neovim.command('FStarLookup', range='', nargs=1, sync=False)
+    # todo: would be cool if it not only went to definition but also displayed type
+    #       somewhere
+    #    +: and be mapped to a key using <cword>
+    @neovim.command('FStarLookup', range='', nargs='?', sync=False)
     def lookup(self, args, range):
-        try:
-            fstar.query_lookup(args[0])
-            fstar.read_any()
-        except Exception as ex:
-            self.log.exception('in lookup')
-            
-    @neovim.command('FStarRestart', range='', nargs=0, sync=False)
-    def restart(self, args, range):
+        if len(args) == 0:
+            args = [self.vim.api.call_function('expand', ['<cword>'])]
+        fstar.query_lookup(args[0], 'defined-at')
+        fstar.read_any()
+
+    @neovim.command('FStarLookupType', range='', nargs='?', sync=False)
+    def lookup_type(self, args, range):
+        if len(args) == 0:
+            args = [self.vim.api.call_function('expand', ['<cword>'])]
+        fstar.query_lookup(args[0], 'type')
+        fstar.read_any()
+
+    @neovim.command('FStarRestart', range=None, nargs=0, sync=False)
+    def restart(self, args, rng):
         fstar.restart()
         self.reset()

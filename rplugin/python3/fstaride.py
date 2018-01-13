@@ -112,9 +112,10 @@ class FStarIde:
         self.vim.command('pedit type_lookup')
         nr = self.vim.api.call_function('bufnr', ['type_lookup'])
         buf = self.vim.buffers[nr]
-        buf.append(info)
-
-        
+        buf.api.set_option('buftype', 'nofile')
+        # todo  disable auto indent
+        #       mark the buffer as disposable
+        buf.append(info.split('\n'))
 
     @neovim.command('FStarSendPara', range='', nargs='0', sync=False)
     def send_para(self, args, range):
@@ -168,7 +169,7 @@ class FStarIde:
         fstar.query_lookup(args[0], 'type')
         fstar.read_any()
 
-    @neovim.command('FStarRestart', range=None, nargs=0, sync=False)
+    @neovim.command('FStarRestart', range='', nargs='0', sync=False)
     def restart(self, args, rng):
-        fstar.restart()
+        fstar.restart(self.filename)
         self.reset()

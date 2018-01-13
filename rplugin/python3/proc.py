@@ -71,8 +71,8 @@ def query_lookup(symbol, mode='defined-at'):
     send(q)
 
 def handle_lookup(query, response):
+    info = response['response']
     if query['client']['mode'] == 'defined-at':
-        info = response['response']
         plugin.handle_lookup(info)
     else:
         defs = ('''NAME {name}
@@ -155,11 +155,11 @@ def init(module):
     p = subprocess.Popen(cmdline, stdin=subprocess.PIPE, stdout=subprocess.PIPE, shell=True)
     handle_intro(read())
 
-def restart():
+def restart(module):
     try: p.terminate()
     except: pass
 
-    init()
+    init(module)
 
 def main():
     # - init
